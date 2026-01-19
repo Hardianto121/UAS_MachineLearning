@@ -1,0 +1,562 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=DATA ANDA:\n\nNama: {{$json.NAMA}} \nNIK: {{$json.NIK}} \nTempat, Tanggal Lahir: {{ $json['Tempat, Tanggal Lahir'] }}\nAgama: {{ $json.Agama }}\nStatus Ktp: {{ $json['Status KTP'] }}, {{ $json.Alasan }}\n\nData anda akan ditambah/diperbarui di Google Sheet",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        368
+      ],
+      "id": "e820a609-adb3-4a3c-9d88-92836d870b61",
+      "name": "Send a text message",
+      "webhookId": "1e898a03-8ab5-4d92-8609-79a0b611b087",
+      "credentials": {
+        "telegramApi": {
+          "id": "f54QTYGSSaOZLgRi",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1792,
+        304
+      ],
+      "id": "bc27e7aa-e924-4047-a41b-905b430dbf77",
+      "name": "Telegram Trigger",
+      "webhookId": "14e900f2-ce18-4c95-89b5-cbf4540c6952",
+      "credentials": {
+        "telegramApi": {
+          "id": "f54QTYGSSaOZLgRi",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.document.thumbnail.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1504,
+        288
+      ],
+      "id": "7eca8e9f-8cdc-4300-af96-d473b831a9a1",
+      "name": "Get a file",
+      "webhookId": "fe8bbcc4-8ad9-4a7c-b2d3-6888653344eb",
+      "credentials": {
+        "telegramApi": {
+          "id": "f54QTYGSSaOZLgRi",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{$binary.data.fileName || 'ktp_telegram.jpg'}}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1nOAX2FmxBnq767g-WAXeNmTBqHyap1yJ",
+          "mode": "list",
+          "cachedResultName": "Foto_KTP",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1nOAX2FmxBnq767g-WAXeNmTBqHyap1yJ"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1056,
+        -64
+      ],
+      "id": "7720b0c2-8291-4da1-ae0e-365c004fe2a0",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "DIWsWMOjjnU3hC00",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "text": "What's in\"Extract the following data from the KTP image and return it ONLY as a raw JSON object: NIK, Nama, Tanggal Lahir, Alamat, Agama. Use these exact keys: NIK, NAMA, TTL, ALAMAT, AGAMA.\" this image?",
+        "inputType": "binary",
+        "binaryPropertyName": "=data",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        336
+      ],
+      "id": "cd992223-2e00-45cc-9dd0-90f3f76ba212",
+      "name": "Analyze an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "uYphzjvfdGN8r24c",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambil teks JSON dari input item\nconst inputItem = $json.content.parts[0].text;\n\ntry {\n    // 1. Bersihkan teks: hapus semua blok markdown dan spasi yang tidak perlu\n    let cleanedText = inputItem\n        .trim()\n        .replace(/```json\\s*/i, '')  // hapus ```json (case-insensitive)\n        .replace(/```/g, '')         // hapus sisa ```\n        .trim();\n\n    // 2. Jika masih ada newline escape (\\n), ubah ke baris biasa\n    cleanedText = cleanedText.replace(/\\\\n/g, '\\n').trim();\n\n    // 3. Parsing string JSON menjadi object\n    const finalData = JSON.parse(cleanedText);\n\n    // 4. Return hasilnya sebagai array agar n8n bisa lanjutkan alur\n    return [{ json: finalData }];\n\n} catch (error) {\n    // Jika parsing gagal, tampilkan log dan kembalikan error\n    return [{\n        json: {\n            error: \"Parsing gagal\",\n            message: error.message,\n            rawText: inputItem\n        }\n    }];\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        352
+      ],
+      "id": "05772d65-0ea6-43d3-bf14-d11821314f23",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "crop",
+        "width": 69,
+        "height": 95,
+        "positionX": 240,
+        "positionY": 40,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        128
+      ],
+      "id": "35df15cc-f2d0-4499-8694-f64da761a298",
+      "name": "Edit Image"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.result.file_path.split('/').pop() }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "18x41PYqc2tBp4fBihJ3zoExS72lY_z1U",
+          "mode": "list",
+          "cachedResultName": "Foto Muka",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/18x41PYqc2tBp4fBihJ3zoExS72lY_z1U"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1040,
+        128
+      ],
+      "id": "5ee2a841-a089-4b6c-b81c-780fb53c310d",
+      "name": "Upload file1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "DIWsWMOjjnU3hC00",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://vision.googleapis.com/v1/images:annotate?key=AIzaSyADFZcXs-w61_OHEDs5HfANd2edVLjd95g",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"requests\": [\n    {\n      \"image\": {\n        \"content\": \"{{ $json.data }}\"\n      },\n      \"features\": [\n        {\n          \"type\": \"IMAGE_PROPERTIES\"\n        },\n        {\n          \"type\": \"SAFE_SEARCH_DETECTION\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1008,
+        592
+      ],
+      "id": "34905a28-8bc1-4faa-9802-abe5eb888524",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "destinationKey": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1232,
+        592
+      ],
+      "id": "14d3a4ce-5781-4d31-b49d-f7a57620ee6b",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Ambil data warna dominan dari hasil Vision\nconst properties = $json.responses[0].imagePropertiesAnnotation.dominantColors.colors;\n\n// 2. Analisis Keamanan Berdasarkan Integritas Warna\nlet status_keamanan = \"Aman\";\nlet alasan = \"Komposisi warna dan noise pada gambar terlihat konsisten (natural).\";\n\n// Mencari warna yang terlalu tajam atau aneh (indikasi edit digital/noise buatan)\nconst suspiciousColors = properties.filter(c => c.pixelFraction > 0.1 && c.score < 0.05);\n\nif (suspiciousColors.length > 0) {\n    status_keamanan = \"Mencurigakan\";\n    alasan = \"Terdeteksi inkonsistensi pada distribusi piksel warna. Gambar kemungkinan telah melalui proses kompresi ulang atau editing digital.\";\n}\n\n// 3. Cek hasil Safe Search (Keaslian Konten)\nconst safeSearch = $json.responses[0].safeSearchAnnotation;\nif (safeSearch.spoof === \"VERY_LIKELY\" || safeSearch.spoof === \"LIKELY\") {\n    status_keamanan = \"Bahaya (Manipulasi)\";\n    alasan = \"Google mendeteksi adanya upaya pemalsuan (spoofing) yang sangat kuat pada dokumen ini.\";\n}\n\nreturn {\n    keamanan: {\n        status: status_keamanan,\n        analisis_teknis: alasan,\n        skor_integritas: properties[0].score.toFixed(2)\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        576
+      ],
+      "id": "b430a20b-fc5b-4e96-ade5-7c6c52b45167",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -720,
+        368
+      ],
+      "id": "6d0a5aca-8472-49da-9aea-8c7115cf0675",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1uBIkFwg2MWDhvWkqF7VXGaKlOkXZAc94XaWpGkzg7m4",
+          "mode": "list",
+          "cachedResultName": "Data Ktp",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1uBIkFwg2MWDhvWkqF7VXGaKlOkXZAc94XaWpGkzg7m4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1uBIkFwg2MWDhvWkqF7VXGaKlOkXZAc94XaWpGkzg7m4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "NIK": "={{ $json.NIK }}",
+            "NAMA": "={{ $json.NAMA }}",
+            "Tempat, Tanggal Lahir": "={{ $json.TTL }}",
+            "Alamat": "={{ $json.ALAMAT }}",
+            "Agama": "={{ $json.AGAMA }}",
+            "Status KTP": "={{ $json.keamanan.status }}",
+            "Alasan": "={{ $json.keamanan.analisis_teknis }}"
+          },
+          "matchingColumns": [
+            "NIK"
+          ],
+          "schema": [
+            {
+              "id": "NIK",
+              "displayName": "NIK",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "NAMA",
+              "displayName": "NAMA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tempat, Tanggal Lahir",
+              "displayName": "Tempat, Tanggal Lahir",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Alamat",
+              "displayName": "Alamat",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agama",
+              "displayName": "Agama",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status KTP",
+              "displayName": "Status KTP",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Alasan",
+              "displayName": "Alasan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -528,
+        368
+      ],
+      "id": "0d42911d-c524-4baf-8324-642a1e45fa7e",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "taYg97PZhkLFm0VB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "text": "=VERIFIED BY SYSTEM - {{ $now.toFormat('dd/MM/yyyy') }}",
+        "fontColor": "#8F8F8F",
+        "positionX": 15,
+        "positionY": 90,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -1248,
+        -64
+      ],
+      "id": "ff109645-c441-4f0a-8372-4d5a7aaeb1cf",
+      "name": "Edit Image1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Image1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Image": {
+      "main": [
+        [
+          {
+            "node": "Upload file1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file1": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Image1": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "b639f935-c8fb-42b3-be99-777c12f2d890",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2526620a55cc105461ac09dbede4b8a0c0d662db35cd8df1eea4eb1e3cebb182"
+  },
+  "id": "CDtDHnz3-fp5Z_laF4mzj",
+  "tags": []
+}
